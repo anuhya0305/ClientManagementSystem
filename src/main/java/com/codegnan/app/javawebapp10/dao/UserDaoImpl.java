@@ -4,6 +4,7 @@ import com.codegnan.app.javawebapp10.dto.CredentialsDto;
 import com.codegnan.app.javawebapp10.dto.UserDto;
 import com.codegnan.app.javawebapp10.entity.Credentials;
 import com.codegnan.app.javawebapp10.entity.User;
+import org.mindrot.jbcrypt.BCrypt;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -19,7 +20,8 @@ public class UserDaoImpl implements UserDao {
         boolean isUserSaved = false;
 
         User user = new User(userDto.getFirstName(), userDto.getLastName());
-        Credentials credentials = new Credentials(credentialsDto.getUsername(), credentialsDto.getLoginPassword());
+        String hashedPassword = BCrypt.hashpw(credentialsDto.getLoginPassword(), BCrypt.gensalt());
+        Credentials credentials = new Credentials(credentialsDto.getUsername(), hashedPassword);
 
         String sqlQuery1 = "INSERT INTO credentials(username, login_password) VALUES (?,?);";
         String sqlQuery2 = "INSERT INTO users (first_name, last_name, credentials_id) VALUES (?,?,?);";
@@ -61,7 +63,7 @@ public class UserDaoImpl implements UserDao {
         List<UserDto> usersList = new ArrayList<>();
 
         String sqlQuery = "SELECT u.user_id, u.first_name, u.last_name, " +
-                "c.username, c.login_password " +
+                "c.username " +
                 "FROM users u " +
                 "INNER JOIN credentials c " +
                 "ON u.credentials_id = c.credentials_id";
@@ -78,7 +80,6 @@ public class UserDaoImpl implements UserDao {
                 userDto.setFirstName(resultSet.getString(2));
                 userDto.setLastName(resultSet.getString(3));
                 userDto.setUsername(resultSet.getString(4));
-                userDto.setLoginPassword(resultSet.getString(5));
 
                 usersList.add(userDto);
             }
@@ -95,26 +96,29 @@ public class UserDaoImpl implements UserDao {
 
         UserDto userDto = null;
 
-        String sqlQuery = "SELECT u.user_id, u.first_name, u.last_name " +
+        String sqlQuery = "SELECT u.user_id, u.first_name, u.last_name, c.login_password " +
                 "FROM users u " +
                 "INNER JOIN credentials c ON u.credentials_id = c.credentials_id " +
-                "WHERE c.username = ? AND c.login_password = ?";
+                "WHERE c.username = ?";
 
         try (Connection connection = DatabaseUtility.getDatabaseConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sqlQuery)) {
 
             preparedStatement.setString(1, username);
-            preparedStatement.setString(2, loginPassword);
 
             ResultSet resultSet = preparedStatement.executeQuery();
 
             if (resultSet.next()) {
 
-                userDto = new UserDto();
+                String storedHash = resultSet.getString(4);
 
-                userDto.setUserId(resultSet.getInt(1));
-                userDto.setFirstName(resultSet.getString(2));
-                userDto.setLastName(resultSet.getString(3));
+                if (BCrypt.checkpw(loginPassword, storedHash)) {
+                    userDto = new UserDto();
+
+                    userDto.setUserId(resultSet.getInt(1));
+                    userDto.setFirstName(resultSet.getString(2));
+                    userDto.setLastName(resultSet.getString(3));
+                }
             }
 
         } catch (SQLException e) {
@@ -129,12 +133,13 @@ public class UserDaoImpl implements UserDao {
 
         boolean isPasswordUpdated = false;
 
+        String hashedPassword = BCrypt.hashpw(newPassword, BCrypt.gensalt());
         String sqlQuery = "UPDATE credentials SET login_password = ? WHERE username = ?";
 
         try (Connection connection = DatabaseUtility.getDatabaseConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sqlQuery)) {
 
-            preparedStatement.setString(1, newPassword);
+            preparedStatement.setString(1, hashedPassword);
             preparedStatement.setString(2, username);
 
             int rows = preparedStatement.executeUpdate();
