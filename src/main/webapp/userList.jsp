@@ -33,7 +33,6 @@ List<UserDto> users = userService.getAllUsers();
 <th>First Name</th>
 <th>Last Name</th>
 <th>Username</th>
-<th>Password</th>
 </tr>
 
 <%
@@ -49,8 +48,6 @@ for(UserDto user : users){
 <td><%=user.getLastName()%></td>
 
 <td><%=user.getUsername()%></td>
-
-<td><%=user.getLoginPassword()%></td>
 
 </tr>
 
